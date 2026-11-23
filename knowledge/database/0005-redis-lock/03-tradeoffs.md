@@ -45,6 +45,8 @@ Redis 락은 **빠르고 간편한 대신 "가끔 두 명이 동시에 열쇠를
 | **etcd** (lease + revision) | Raft 합의 + 디스크 fsync, 수 ms | 과반 합의로 보장 | `revision`이 단조 증가 | 정확성용 락, 리더 선출 |
 | **ZooKeeper** (ephemeral sequential znode) | ZAB 합의, 수 ms | 세션 만료 기반으로 보장 | `zxid`/znode 순번 | 정확성용, 기존 ZK 인프라가 있을 때 |
 
+Redis와 etcd의 보장이 왜 다른지(비동기 복제 vs Raft 과반 기록)는 [Redis 복제와 Raft의 차이](../../../inquiry/distributed-systems/0010-redis-replication-vs-raft-and-write-durability.md)에 있다.
+
 DB 락·낙관적 락·유니크 제약·파티셔닝처럼 **Redis 밖 수단까지 포함한 비교**와 고르는 순서는 [락 개론 — 대안 비교](../../cs/0001-lock/03-tradeoffs.md#4-대안-비교)에 있다. 요점은 두 가지다.
 
 - 가장 좋은 락은 **필요 없게 만드는 것**이다. 같은 주문을 한 워커에게만 보내면(키 파티셔닝) 락이 사라진다.

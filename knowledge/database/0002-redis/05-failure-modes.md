@@ -23,7 +23,7 @@ model: claude-opus-5-5
 | 복제 지연·중단 | 장애 조치 시 유실 폭 증가, 레플리카 읽기에 옛 데이터 | 복제 백로그·대역폭 점검 |
 | 디스크 문제(AOF 손상, 디스크 풀) | 재시작 실패, `MISCONF` 에러로 쓰기 거부 | `redis-check-aof --fix`, 디스크 확보 |
 | 운영 실수(`FLUSHALL`, 잘못된 `DEL` 패턴) | 데이터 일괄 삭제 — **복제되어 레플리카에서도 사라짐** | 백업에서 복원, 위험 명령 차단 |
-| Redis 전체 다운 | 캐시 의존 서비스가 DB로 몰려 연쇄 장애 | 클라이언트 폴백·서킷 브레이커 (7장) |
+| Redis 전체 다운 | 캐시 의존 서비스가 DB로 몰려 연쇄 장애 | 클라이언트 폴백·서킷 브레이커 (5장) |
 
 ### 2. 영속성: 재시작 후 무엇이 남나
 
@@ -40,65 +40,39 @@ model: claude-opus-5-5
 - 7.0+는 **Multi-part AOF**(base 파일 + 증분 파일 + manifest)로 재작성 중 안정성이 개선됐다.
 - RDB 저장 실패 시 기본적으로 쓰기를 거부한다(`stop-writes-on-bgsave-error yes`) → `MISCONF` 에러. 디스크·권한·메모리(fork 실패)를 먼저 확인한다.
 
-### 3. 복제 (Replication)
+### 3. 복제 · Sentinel · Cluster: 세 구성의 관계
 
-```
-[Master] ──비동기 명령 스트림──▶ [Replica 1]
-         └────────────────────▶ [Replica 2]
-```
+셋은 따로 있는 기술이 아니라 **겹쳐 쌓인 구성**이다. 복제 위에 자동 장애 조치를 얹으면 Sentinel, 거기에 샤딩을 더하고 장애 조치를 노드 안에 내장하면 Cluster다.
 
-- **전체 동기화**: 레플리카가 처음 붙거나 너무 오래 끊겼으면 마스터가 `fork()`로 RDB를 만들어 전송한다. 데이터가 크면 마스터 메모리·CPU·네트워크를 크게 쓴다. `repl-diskless-sync yes`로 디스크를 거치지 않고 소켓으로 바로 보낼 수 있다.
-- **부분 동기화(PSYNC)**: 잠깐 끊긴 경우 **복제 백로그**에 남은 부분만 재전송. `repl-backlog-size`(기본 1MB)가 작으면 짧은 단절에도 전체 동기화가 반복된다 → 쓰기량 × 예상 단절 시간 이상으로 키운다.
-- 복제는 **비동기**다. 마스터는 클라이언트에 OK를 보낸 뒤 레플리카로 전파한다.
-- 레플리카는 기본 읽기 전용(`replica-read-only yes`).
+| 구성 | 복제 | 자동 장애 조치 | 샤딩 |
+|---|---|---|---|
+| 복제만 (Master–Replica) | O | X (사람이 `REPLICAOF NO ONE`으로 승격) | X |
+| **Sentinel** | O | O (**외부** Sentinel 프로세스가 감시·투표) | X |
+| **Cluster** | O (샤드마다) | O (**내장**, 마스터들이 투표) | O (16384 슬롯) |
 
-### 4. Sentinel: 단일 샤드 자동 장애 조치
+**세 구성 모두에 해당하는 것**
 
-```
-   [Sentinel A]   [Sentinel B]   [Sentinel C]     ← 서로 다른 AZ/호스트
-         \            |            /
-          ▼           ▼           ▼
-       [Master] ──▶ [Replica 1] ──▶ [Replica 2]
-```
+- 복제는 **비동기**다. 마스터는 자기 메모리에 반영하자마자 클라이언트에 OK를 보내고, 레플리카에는 나중에 전파한다. 그래서 장애 조치 때 **응답한 쓰기가 사라질 수 있다**(4장).
+- 장애 조치의 투표는 **새 마스터를 고르는 데만** 쓴다. 쓰기마다 과반 확인을 받는 Raft 같은 합의가 아니다 → [Redis 복제와 Raft의 차이](../../../inquiry/distributed-systems/0010-redis-replication-vs-raft-and-write-durability.md).
+- 투표가 성립하려면 과반이 살아 있어야 한다. Sentinel은 **3대 이상·홀수·서로 다른 장애 도메인**, Cluster는 **마스터 3 + 레플리카 3** 이상.
+- 복제 백로그(`repl-backlog-size`, 기본 1MB)가 작으면 잠깐만 끊겨도 전체 동기화(`fork()` + RDB 전송)가 반복된다. 쓰기량 × 예상 단절 시간 이상으로 키운다.
 
-**장애 조치 흐름**
-1. 각 Sentinel이 `down-after-milliseconds` 동안 마스터 응답이 없으면 **SDOWN**(주관적 다운).
-2. `quorum` 개수 이상이 동의하면 **ODOWN**(객관적 다운).
-3. Sentinel들 중 **과반수 투표**로 리더 선출 → 리더가 가장 적합한 레플리카(우선순위 → 복제 오프셋 최신 → run ID)를 승격.
-4. 나머지 레플리카를 새 마스터에 붙이고, 클라이언트에 Pub/Sub(`+switch-master`)로 알림.
+**Sentinel에서 볼 것**
 
-```conf
-# sentinel.conf
-sentinel monitor mymaster 10.0.1.10 6379 2      # quorum 2
-sentinel down-after-milliseconds mymaster 5000
-sentinel failover-timeout mymaster 60000
-sentinel parallel-syncs mymaster 1
-```
+- `quorum`은 "다운 판정"에만 쓰이고, 실제 장애 조치는 **전체 Sentinel의 과반** 승인이 필요하다.
+- 승격 대상은 우선순위 → 복제 오프셋이 가장 앞선 레플리카 순으로 고른다.
+- 클라이언트는 마스터 주소를 하드코딩하지 않고 Sentinel에 묻는다(`SENTINEL get-master-addr-by-name`). Lettuce·Jedis·Redisson 모두 지원한다.
 
-- Sentinel은 **최소 3개, 홀수, 서로 다른 장애 도메인**에. 2개면 하나가 죽었을 때 과반이 안 돼 장애 조치가 안 된다.
-- `quorum`은 "다운 판정"에만 쓰이고, 실제 장애 조치 실행은 **전체 Sentinel의 과반수** 승인이 필요하다.
-- 클라이언트는 마스터 주소를 하드코딩하지 않고 Sentinel에 묻는다(`SENTINEL get-master-addr-by-name mymaster`). Lettuce·Jedis·Redisson 모두 Sentinel 모드를 지원한다.
+**Cluster에서 볼 것**
 
-### 5. Cluster: 샤딩 + 자동 장애 조치
+- 프록시가 없다. **클라이언트가** 키의 슬롯(`CRC16(key) % 16384`)을 계산해 맡은 노드로 바로 보내고, 슬롯 표가 낡았으면 노드가 `MOVED`로 안내한다.
+- 한 샤드의 마스터와 레플리카가 **모두** 죽으면 그 슬롯이 사라진다. 기본값(`cluster-require-full-coverage yes`)이면 **클러스터 전체가 요청을 거부**하고, `no`면 살아 있는 슬롯만 서비스한다.
+- 마스터와 너무 오래 끊겼던 레플리카는 승격 자격이 없다(`cluster-replica-validity-factor`). 레플리카를 잃은 마스터에는 다른 샤드의 남는 레플리카가 옮겨 온다(**replica migration**).
+- 계획된 전환은 레플리카에서 `CLUSTER FAILOVER`(동기화를 마친 뒤 전환해 유실 없음).
 
-```
- 슬롯 0~5460        슬롯 5461~10922     슬롯 10923~16383
- [Master A]         [Master B]          [Master C]
-     │                  │                   │
- [Replica A']       [Replica B']        [Replica C']
-```
+Sentinel과 Cluster 중 무엇을 고를지는 [트레이드오프 — 배포 형태](./03-tradeoffs.md#33-배포-형태--크기와-쓰기량으로-고른다)에 있다.
 
-- 노드끼리 **gossip**(클러스터 버스, 포트 +10000)으로 상태를 주고받는다.
-- `cluster-node-timeout` 동안 응답 없는 노드를 **PFAIL**로 표시 → 마스터 과반이 동의하면 **FAIL** → 그 마스터의 레플리카가 다른 마스터들의 투표를 받아 승격.
-- **최소 구성: 마스터 3 + 레플리카 3**. 마스터가 과반을 유지해야 장애 판정·투표가 된다.
-- 한 샤드의 마스터와 레플리카가 모두 죽으면 그 슬롯 범위가 사라진다. 기본값(`cluster-require-full-coverage yes`)이면 **클러스터 전체가 쓰기·읽기를 거부**한다. `no`로 바꾸면 살아 있는 슬롯은 계속 서비스(가용성 우선).
-- 레플리카가 마스터와 너무 오래 끊겨 있었으면 승격 자격이 없다(`cluster-replica-validity-factor`). 데이터가 오래된 레플리카가 마스터가 되는 걸 막는 장치다.
-- 마스터가 레플리카를 잃으면 레플리카가 남는 다른 샤드에서 하나를 가져온다(**replica migration**).
-- 계획된 전환은 레플리카에서 `CLUSTER FAILOVER`(데이터 유실 없이 동기화 후 전환).
-
-Sentinel과 Cluster 중 무엇을 고를지는 [트레이드오프 — 배포 형태](./03-tradeoffs.md#33-배포-형태--크기와-쓰기량으로-고른다)에서 비교한다.
-
-### 6. 데이터 유실과 스플릿 브레인
+### 4. 데이터 유실과 스플릿 브레인
 
 **비동기 복제의 유실 창**
 
@@ -127,7 +101,7 @@ Replica 승격 → x 없음
 
 위 대책으로도 유실을 0으로 만들 수는 없다. 유실이 전혀 없어야 할 때의 선택지(MemoryDB 같은 내구성 있는 호환 서비스, 원장을 RDBMS에 두기)는 [트레이드오프 — 영속성 모드](./03-tradeoffs.md#31-영속성-모드--무엇을-잃어도-되나로-고른다)에서 다룬다. 쿼럼·펜싱 같은 제품 공통의 스플릿 브레인 방지 원리는 [고가용성 구성 방식 — replica vs cluster](../../../inquiry/distributed-systems/0009-high-availability-replication-vs-cluster-and-patterns.md)에 있다.
 
-### 7. 클라이언트 측 장애 대응
+### 5. 클라이언트 측 장애 대응
 
 Redis 자체의 HA만큼 중요한 것이 **애플리케이션이 Redis 장애를 어떻게 견디는가**다.
 
@@ -140,7 +114,7 @@ Redis 자체의 HA만큼 중요한 것이 **애플리케이션이 Redis 장애�
 | 캐시 워밍 | 장애 조치·재시작 후 빈 캐시로 인한 stampede 대비 — 핵심 키 미리 적재, 요청 합치기 |
 | 멱등성 | 타임아웃 후 재시도하면 `INCR` 같은 명령이 두 번 적용될 수 있다. 재시도 가능한 연산만 재시도 |
 
-### 8. 백업과 재해 복구(DR)
+### 6. 백업과 재해 복구(DR)
 
 - **백업**: `BGSAVE`로 만든 RDB 파일을 주기적으로 오브젝트 스토리지(S3 등)에 복사. 레플리카에서 떠서 마스터 부하를 피한다.
 - **복원 훈련**: RDB를 새 인스턴스에 로드해 키 수·샘플 값을 검증.
@@ -157,7 +131,7 @@ Redis 자체의 HA만큼 중요한 것이 **애플리케이션이 Redis 장애�
 | Sentinel / Cluster | 복제 지연만큼 (보통 1초 미만) | 감지 시간 + 승격 (보통 수~수십 초) |
 | MemoryDB | 거의 0 | 수 초~수십 초 |
 
-### 9. 매니지드 서비스의 HA
+### 7. 매니지드 서비스의 HA
 
 | 서비스 | HA 방식 |
 |---|---|
@@ -166,9 +140,9 @@ Redis 자체의 HA만큼 중요한 것이 **애플리케이션이 Redis 장애�
 | Google Memorystore | 표준 티어 자동 장애 조치, 클러스터 모드 |
 | Azure Cache for Redis / Azure Managed Redis | 존 중복, 지역 복제 |
 
-매니지드여도 **장애 조치 중 수~수십 초의 연결 끊김은 발생**한다. 7장의 클라이언트 대응은 여전히 필요하다.
+매니지드여도 **장애 조치 중 수~수십 초의 연결 끊김은 발생**한다. 5장의 클라이언트 대응은 여전히 필요하다.
 
-### 10. 장애 훈련
+### 8. 장애 훈련
 
 | 시나리오 | 방법 |
 |---|---|

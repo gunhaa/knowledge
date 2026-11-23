@@ -89,7 +89,7 @@ Java에서는 Redisson의 `RLock`이 토큰·연장·재진입을 처리해 준�
 ### 9. 연결·클라이언트 문제
 
 - 요청마다 연결 생성 → 커넥션 풀(Lettuce는 기본 단일 연결 멀티플렉싱, Jedis는 풀 필수).
-- 타임아웃 미설정 → Redis가 느려지면 앱 스레드가 전부 묶임. 타임아웃·서킷 브레이커·DB 폴백 설정은 [장애 대응 — 클라이언트 측 장애 대응](./05-failure-modes.md#7-클라이언트-측-장애-대응)에 있다.
+- 타임아웃 미설정 → Redis가 느려지면 앱 스레드가 전부 묶임. 타임아웃·서킷 브레이커·DB 폴백 설정은 [장애 대응 — 클라이언트 측 장애 대응](./05-failure-modes.md#5-클라이언트-측-장애-대응)에 있다.
 - 왕복이 많음 → **파이프라이닝**, `MGET`/`MSET`으로 묶기.
 - `maxclients` 초과, `client-output-buffer-limit`(Pub/Sub 느린 구독자) 끊김 → `INFO clients`, `CLIENT LIST` 모니터링.
 

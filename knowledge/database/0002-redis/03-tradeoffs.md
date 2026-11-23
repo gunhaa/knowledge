@@ -45,6 +45,8 @@ Redis는 **요리사가 한 명뿐인 아주 빠른 포장마차**다. 재료를
 
 #### 3.1 영속성 모드 — 무엇을 잃어도 되나로 고른다
 
+기본 설정은 **RDB(스냅샷)만 켜져 있고 AOF(쓰기 로그)는 꺼져 있다** → 크래시 때 최대 수 분치 유실. 아래 표에서 용도에 맞게 바꾼다 (RDB·AOF가 무엇인지는 [개요 — 아키텍처 핵심](./02-overview.md#2-아키텍처-핵심)).
+
 | 용도 | 권장 | 이유 |
 |---|---|---|
 | 순수 캐시 (원본이 DB에 있음) | 영속성 끔 또는 RDB만 | 재시작 시 다시 채우면 됨. `fork()` 비용과 디스크 I/O 제거 |
@@ -86,7 +88,7 @@ Redis는 **요리사가 한 명뿐인 아주 빠른 포장마차**다. 재료를
 | 운영 복잡도 | 낮음 | 높음 (리샤딩, 슬롯 관리) |
 | 클라이언트 | Sentinel 지원 클라이언트 | Cluster 지원 클라이언트 (`MOVED`/`ASK` 처리) |
 
-장애 조치가 실제로 어떻게 일어나는지는 [장애 대응 — Sentinel](./05-failure-modes.md#4-sentinel-단일-샤드-자동-장애-조치)과 [장애 대응 — Cluster](./05-failure-modes.md#5-cluster-샤딩--자동-장애-조치)에, 제품을 가리지 않는 복제·클러스터 구성 방식 비교는 [고가용성 구성 방식 — replica vs cluster](../../../inquiry/distributed-systems/0009-high-availability-replication-vs-cluster-and-patterns.md)에 있다.
+장애 조치가 실제로 어떻게 일어나는지는 [장애 대응 — 복제 · Sentinel · Cluster](./05-failure-modes.md#3-복제--sentinel--cluster-세-구성의-관계)에, 제품을 가리지 않는 복제·클러스터 구성 방식 비교는 [고가용성 구성 방식 — replica vs cluster](../../../inquiry/distributed-systems/0009-high-availability-replication-vs-cluster-and-patterns.md)에 있다.
 
 #### 3.4 엔진과 매니지드 서비스 — 라이선스와 비용으로 고른다
 
