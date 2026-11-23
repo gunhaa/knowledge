@@ -13,6 +13,8 @@ model: claude-opus-5-5
 
 ## 일반 설명
 
+> 솔루션을 가리지 않는 공통 개념(락이 푸는 문제, 모드·단위·해제 보장, 비관적 vs 낙관적)은 [락 개론](../../cs/0001-lock/02-overview.md)에 있다. 이 문서는 JVM 안의 구현을 다룬다.
+
 ### 1. 락이 해결하는 세 가지 문제
 
 | 문제 | 예 | 락 없이 생기는 일 |
@@ -209,6 +211,7 @@ record Snapshot(List<String> items) {}                   // 불변 객체는 공
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/02-overview.md)
 - [Java 락의 역사](./01-history.md)
 - [Java 락 트레이드오프와 선택 기준](./03-tradeoffs.md)
 - [Java 락: 흔한 함정과 해결 방법](./04-pitfalls.md)

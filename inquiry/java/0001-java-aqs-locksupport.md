@@ -168,6 +168,7 @@ while (queue.peek() != current || !locked.compareAndSet(false, true)) {
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../knowledge/cs/0001-lock/02-overview.md)
 - [Java 락의 역사](../../knowledge/java/0002-java-lock/01-history.md)
 - [Java 락 개요와 기본 사용법](../../knowledge/java/0002-java-lock/02-overview.md)
 - [Java 락 트레이드오프와 선택 기준](../../knowledge/java/0002-java-lock/03-tradeoffs.md)

@@ -128,6 +128,7 @@ public synchronized void decrease(Long id) {   // ✗
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/04-pitfalls.md)
 - [Java 락의 역사](./01-history.md)
 - [Java 락 개요와 기본 사용법](./02-overview.md)
 - [Java 락 트레이드오프와 선택 기준](./03-tradeoffs.md)

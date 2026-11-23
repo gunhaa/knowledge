@@ -82,6 +82,7 @@ f.cancel(true);   // 실행 중인 스레드에 interrupt()
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../knowledge/cs/0001-lock/02-overview.md)
 - [Java 락 — 02-overview](../../knowledge/java/0002-java-lock/02-overview.md)
 - [Java 락 — 04-pitfalls](../../knowledge/java/0002-java-lock/04-pitfalls.md)
 - [Java 락 — 05-failure-modes](../../knowledge/java/0002-java-lock/05-failure-modes.md)

@@ -125,6 +125,7 @@ public class AbqDemo {
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../knowledge/cs/0001-lock/02-overview.md)
 - [Java 락 — 02-overview](../../knowledge/java/0002-java-lock/02-overview.md)
 - [Java 락 — 03-tradeoffs](../../knowledge/java/0002-java-lock/03-tradeoffs.md)
 - [AQS와 LockSupport](./0001-java-aqs-locksupport.md)
