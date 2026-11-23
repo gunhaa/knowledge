@@ -108,7 +108,6 @@ blockquote {
     color: var(--muted);
 }
 section > blockquote {
-    width: 55%;
     box-sizing: border-box;
 }
 blockquote p {
@@ -155,14 +154,38 @@ p.crumbs {
 }
 p.crumbs a { color: inherit; }
 
-/* 오른쪽 여백의 세트 목차 */
-/* Tufte의 여백 주석은 본문 폭(55%) 단락 안에서 오른쪽으로 떠야 제자리에 온다 */
+/*
+ * 본문 폭: Tufte는 단락을 55%로 고정하고 오른쪽 45%를 여백 주석 자리로 비워 두는데,
+ * 이 사이트의 여백에는 맨 위 세트 목차 하나뿐이라 그 아래로는 빈 공간만 남는다.
+ * 본문을 표와 같은 90%로 넓히고, 목차는 그 안에서 오른쪽에 띄운다(float).
+ * 그러면 목차 옆에서는 글이 목차를 피해 좁게 흐르고, 목차가 끝난 아래부터는 90%로 펼쳐진다.
+ */
+section > p,
+section > footer,
+section > table,
+section > blockquote {
+    width: 90%;
+}
+section > dl,
+section > ol,
+section > ul {
+    width: 85%;
+}
+
+/* 오른쪽에 띄운 세트 목차 */
 p.nav-holder {
-    width: 55%;
+    width: 90%;
     margin: 0;
     line-height: 0;
 }
+/* Tufte .marginnote의 음수 여백(본문 밖으로 밀어내기)을 지우고 본문 폭 안에 띄운다 */
 .margin-nav {
+    float: right;
+    clear: right;
+    width: 30%;
+    margin: 0.3rem 0 1.5rem 2.5rem;
+    padding-left: 1.2rem;
+    border-left: 1px solid var(--rule);
     line-height: 1.9;
     font-size: var(--text-small);
 }
@@ -174,7 +197,7 @@ p.nav-holder {
     font-size: 0.7em;
 }
 
-/* 넓은 표·코드는 본문 폭(55%)을 넘어 펼치되, 여백 목차와 겹치지 않게 그 아래로 내린다 */
+/* 표·코드는 글처럼 목차를 피해 흐를 수 없으므로(줄바꿈이 없는 덩어리) 목차 아래로 내린다 */
 div.table-wrapper {
     width: 90%;
     clear: both;
@@ -220,7 +243,7 @@ a.gh::after {
 footer.doc-footer p {
     font-size: var(--text-small);
     color: #666;
-    width: 55%;
+    width: 90%;
     border-top: 1px solid #ccc;
     padding-top: 1rem;
     margin-top: 4rem;
@@ -240,10 +263,13 @@ footer.doc-footer p {
         width: 100%;
         margin: 1rem 0;
         padding: 0.8rem 0;
+        border-left: none;
         border-top: 1px solid #ccc;
         border-bottom: 1px solid #ccc;
     }
     div.table-wrapper, pre.mermaid, pre > code, section > blockquote, dl.doc-meta { width: 100%; }
+    section > p, section > footer, section > table { width: 100%; }
+    section > dl, section > ol, section > ul { width: 90%; }
     footer.doc-footer p { width: 100%; }
 }
 
