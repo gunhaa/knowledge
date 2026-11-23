@@ -48,6 +48,13 @@ InnoDB ───┬─ 테이블 락          IS / IX(의도 락), AUTO-INC, LOC
 | **next-key lock** | record + **그 앞** gap | `(5,10]` | `X` |
 | **insert intention** | INSERT 직전 "이 gap에 넣겠다"는 표시 | — | `X,INSERT_INTENTION` |
 
+```
+ -∞ ──( gap )── 5 ──( gap )── 10 ──( gap )── 15 ──( gap )── +∞(supremum)
+                    └─ next-key (5,10] ─┘
+```
+
+- **gap lock** `(5,10)`: 6~9 삽입은 막지만 10 자체의 수정·삭제는 막지 않는다. 목적은 팬텀 방지 하나뿐이다.
+- **next-key lock** `(5,10]`: 10의 수정·삭제와 6~9 삽입을 함께 막는다. RR 잠금 읽기의 **기본 단위**이고, 조건에 따라 record lock이나 gap lock으로 줄어든다(4절).
 - 마지막 레코드 뒤는 가상 레코드 **supremum**(+∞)이 맡는다. `(15, +∞]`가 잠기면 끝에 붙는 INSERT가 모두 막힌다.
 - **gap lock끼리는 충돌하지 않는다.** 두 트랜잭션이 같은 gap에 gap lock을 동시에 가질 수 있다. gap lock이 막는 것은 **insert intention lock**(INSERT)뿐이다. 존재하지 않는 행에 `FOR UPDATE`를 건 두 트랜잭션이 둘 다 성공한 뒤 서로의 INSERT를 막아 데드락이 나는 이유다.
 - 공유(S)와 배타(X): S끼리는 함께 가질 수 있고, X는 S·X 모두와 충돌한다.
@@ -63,12 +70,20 @@ InnoDB ───┬─ 테이블 락          IS / IX(의도 락), AUTO-INC, LOC
 
 ### 4. 락은 어디에 걸리나
 
-1. **인덱스 레코드**에 걸린다. 행이 아니다. 테이블에는 항상 클러스터드 인덱스(PK)가 있으니 인덱스가 없으면 PK 전체를 스캔하며 **모든 행**을 잠근다.
+1. **인덱스 레코드**에 걸린다. 행이 아니다. 테이블에는 항상 클러스터드 인덱스(PK)가 있어서, 쓸 인덱스가 없으면 PK를 잠근다.
 2. WHERE 조건이 아니라 **실제로 스캔한 범위**에 걸린다. 조건에서 탈락한 행도 스캔했으면 잠긴다.
-3. 보조 인덱스로 찾으면 보조 인덱스에 next-key lock, **클러스터드 인덱스에는 record lock**이 추가된다.
-4. **유니크 인덱스 + 모든 키 컬럼 등치 + 행 존재**일 때만 record lock으로 줄어든다. 그 외는 next-key lock이 기본이다.
 
-쿼리 유형별 정확한 범위는 [RR에서 next-key lock이 걸리는 경우](../../../inquiry/database/0016-mysql-rr-next-key-lock-cases.md)에 표로 정리했다.
+인덱스 종류와 조건별 요약 (REPEATABLE READ, 잠금 읽기·`UPDATE`·`DELETE`, 인덱스 값 `10, 15, 20`):
+
+| 인덱스 | 등치 조건 (`= 15`) | 범위 조건 (`> 15`, `< 15`) |
+|---|---|---|
+| **클러스터드 (PK)** | • 값 있음: 그 PK **record lock**만 (gap 없음)<br>• 값 없음: 그 자리 **gap lock** | 범위 안 레코드 **next-key lock** + 끝단 **gap lock** |
+| **유니크 보조** | • 값 있음: 보조키 **record lock** + 매칭 PK **record lock**<br>• 값 없음: 그 자리 **gap lock** | 범위 안 보조키 **next-key lock** + 매칭 PK **record lock** |
+| **비유니크 보조** | • 값 있음: 일치하는 모든 `15`에 **next-key lock** + 다음 간격 **gap lock** + 매칭 PK **record lock**<br>• 값 없음: 그 자리 **gap lock** | 범위 안 보조키 **next-key lock** + 매칭 PK **record lock** |
+| **인덱스 없음** | PK 전체 스캔 → **모든 레코드 next-key lock + supremum**. 맞는 행이 1건이어도 사실상 테이블 전체가 잠기고 모든 INSERT가 막힌다 | 등치와 같다 (어차피 전체 스캔) |
+
+- record lock만으로 줄어드는 것은 **유니크 + 모든 키 컬럼 등치 + 값 있음**일 때뿐이다. 복합 유니크의 일부 컬럼만 쓰면 범위로 취급한다.
+- 격리 수준별 차이는 6절, 쿼리별 예시와 버전별 끝단 처리는 [RR에서 next-key lock이 걸리는 경우](../../../inquiry/database/0016-mysql-rr-next-key-lock-cases.md)에 있다.
 
 ### 5. 읽기의 두 종류
 
