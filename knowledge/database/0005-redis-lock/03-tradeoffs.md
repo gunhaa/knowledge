@@ -109,8 +109,8 @@ DB 락·낙관적 락·유니크 제약·파티셔닝처럼 **Redis 밖 수단�
 
 1. **락이 뚫리면 무슨 일이 생기나?** 비용 증가 → Redis 단일. 데이터 손상 → fencing·DB 제약을 반드시 함께, 또는 etcd.
 2. **락 없이 되나?** 원자 명령(`INCRBY`, `SET NX` 하나로 끝), 유니크 제약, 키 파티셔닝을 먼저 본다.
-3. **보호 대상이 DB 하나인가?** 그렇다면 DB 안에서.
-4. **작업 시간 p99는?** TTL은 그보다 길게, 작업 타임아웃은 TTL보다 짧게. 길면 자동 연장.
+3. **보호 대상이 DB 하나인가?** 그렇다면 Redis 락 없이 DB 안에서 끝낸다(조건부 UPDATE, 유니크 제약, `FOR UPDATE`, 낙관적 락). DB 부하를 줄이려고 Redis를 앞에 두는 경우에도 DB 쪽 방어선은 그대로 둔다.
+4. **작업 시간 p99는?** `tryLock(waitTime, leaseTime, unit)`의 `leaseTime`(TTL)은 p99보다 길게, 작업 타임아웃은 `leaseTime`보다 짧게. 예측이 어려우면 `tryLock(waitTime, unit)`으로 `leaseTime`을 생략해 자동 연장(watchdog).
 5. **기다려야 하나, 포기해도 되나?** 포기 가능하면 `tryLock(0)`.
 6. **장애 조치 때 락을 잃어도 되나?** 안 되면 Redis만으로는 부족하다.
 7. **락용 Redis의 축출 정책은 `noeviction`인가?**
