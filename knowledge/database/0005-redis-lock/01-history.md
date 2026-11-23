@@ -55,6 +55,7 @@ model: claude-opus-5-5
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/01-history.md)
 - [Redis 락 개요와 동작 방식](./02-overview.md)
 - [Redis 락 트레이드오프와 선택 기준](./03-tradeoffs.md)
 - [Redis 락 사용 시 흔한 함정과 해결 방법](./04-pitfalls.md)

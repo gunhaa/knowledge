@@ -13,7 +13,7 @@ MySQL(InnoDB)은 **책장의 책(행)이 아니라 색인 카드(인덱스)에 �
 
 ## 일반 설명
 
-> 이 문서는 **어떻게 동작하나**만 다룬다. 왜 이렇게 설계했고 언제 무엇을 고르는지는 [트레이드오프](./03-tradeoffs.md), 잘못 쓰는 패턴은 [흔한 함정](./04-pitfalls.md), 장애는 [장애 유형](./05-failure-modes.md)에 있다.
+> 이 문서는 **어떻게 동작하나**만 다룬다. 왜 이렇게 설계했고 언제 무엇을 고르는지는 [트레이드오프](./03-tradeoffs.md), 잘못 쓰는 패턴은 [흔한 함정](./04-pitfalls.md), 장애는 [장애 유형](./05-failure-modes.md)에 있다. 솔루션을 가리지 않는 공통 개념(모드·단위·해제 보장·fencing·2단계 락)은 [락 개론](../../cs/0001-lock/02-overview.md)에 있다.
 
 ### 1. 락이 해결하는 문제
 
@@ -198,6 +198,7 @@ SHOW ENGINE INNODB STATUS\G   -- LATEST DETECTED DEADLOCK
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/02-overview.md)
 - [MySQL 락의 역사](./01-history.md)
 - [MySQL 락 트레이드오프와 선택 기준](./03-tradeoffs.md)
 - [MySQL 락: 흔한 함정과 해결 방법](./04-pitfalls.md)

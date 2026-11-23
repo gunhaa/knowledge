@@ -49,7 +49,7 @@ InnoDB는 "**의심스러우면 넓게 잠근다**"를 골랐다. 빈칸까지 �
 | **`SKIP LOCKED`** | 잠긴 행 건너뛰기 | 작업자 여러 명이 겹치지 않게 분배 | 결과가 비결정적. 일관된 뷰가 필요하면 부적합 | DB 기반 작업 큐, Outbox 폴링 |
 | **`GET_LOCK()`** 이름 락 | 행과 무관한 이름에 세션 락 | 테이블 없이 상호 배제 | **세션 단위**, 장애 조치 시 사라짐, Group Replication에서 노드 간 공유 안 됨 | 단일 primary에서 배치 중복 실행 방지 |
 | **READ COMMITTED로 낮추기** | gap lock 대부분 제거 | 데드락·INSERT 대기 크게 감소 | 팬텀 허용, binlog ROW 필수 | 쓰기 경합이 큰 OLTP |
-| **분산 락 (Redis·ZooKeeper·etcd)** | DB 밖에서 상호 배제 | DB 부하 분리, 여러 저장소에 걸친 작업 | 정합성은 보장 못 함(fencing 필요) | DB 하나로 묶이지 않는 작업 → [Java 락 — 분산 락](../../java/0002-java-lock/05-failure-modes.md#6-분산-락의-장애-시나리오) |
+| **분산 락 (Redis·ZooKeeper·etcd)** | DB 밖에서 상호 배제 | DB 부하 분리, 여러 저장소에 걸친 작업 | 정합성은 보장 못 함(fencing 필요) | DB 하나로 묶이지 않는 작업 → [락 개론 — 대안 비교](../../cs/0001-lock/03-tradeoffs.md#4-대안-비교) |
 
 PostgreSQL과의 모델 차이(범위 잠금 vs SSI·직렬화 오류)는 [MySQL과 PostgreSQL의 락 처리 차이](../../../inquiry/database/0005-mysql-postgresql-lock-handling-differences.md), [PostgreSQL은 gap lock 없이 어떻게 감지하나](../../../inquiry/database/0006-postgresql-phantom-detection-without-gap-lock.md).
 
@@ -95,6 +95,7 @@ PostgreSQL과의 모델 차이(범위 잠금 vs SSI·직렬화 오류)는 [MySQL
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/03-tradeoffs.md)
 - [MySQL 락의 역사](./01-history.md)
 - [MySQL 락 개요와 동작 방식](./02-overview.md)
 - [MySQL 락: 흔한 함정과 해결 방법](./04-pitfalls.md)

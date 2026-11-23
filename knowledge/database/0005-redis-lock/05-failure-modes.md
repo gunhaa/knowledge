@@ -143,6 +143,7 @@ Redis 락이 제 기능을 못 하는 경우는 크게 둘이다. **게시판(Re
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/05-failure-modes.md)
 - [Redis 락의 역사](./01-history.md)
 - [Redis 락 개요와 동작 방식](./02-overview.md)
 - [Redis 락 트레이드오프와 선택 기준](./03-tradeoffs.md)

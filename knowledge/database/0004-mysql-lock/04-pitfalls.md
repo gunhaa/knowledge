@@ -100,6 +100,7 @@ model: claude-opus-5-5
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/04-pitfalls.md)
 - [MySQL 락의 역사](./01-history.md)
 - [MySQL 락 개요와 동작 방식](./02-overview.md)
 - [MySQL 락 트레이드오프와 선택 기준](./03-tradeoffs.md)

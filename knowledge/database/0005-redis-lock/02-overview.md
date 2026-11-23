@@ -13,7 +13,7 @@ Redis 락은 **"이 자리는 내가 30초 동안 쓴다"는 이름표가 붙은
 
 ## 일반 설명
 
-> 이 문서는 **어떻게 동작하나**만 다룬다. 왜 이렇게 설계했고 언제 무엇을 고르는지는 [트레이드오프](./03-tradeoffs.md), 잘못 쓰는 패턴은 [흔한 함정](./04-pitfalls.md), 장애는 [장애 유형](./05-failure-modes.md)에 있다.
+> 이 문서는 **어떻게 동작하나**만 다룬다. 왜 이렇게 설계했고 언제 무엇을 고르는지는 [트레이드오프](./03-tradeoffs.md), 잘못 쓰는 패턴은 [흔한 함정](./04-pitfalls.md), 장애는 [장애 유형](./05-failure-modes.md)에 있다. 솔루션을 가리지 않는 공통 개념(모드·단위·해제 보장·fencing·2단계 락)은 [락 개론](../../cs/0001-lock/02-overview.md)에 있다.
 
 ### 1. 무엇을 해결하나
 
@@ -83,12 +83,7 @@ lock:order:42  (Hash, TTL 30s)
 
 ### 5. Fencing token
 
-락만으로는 "**지금도 내가 보유자인가**"를 보장하지 못한다(GC 정지 중 만료 등 → [장애 유형](./05-failure-modes.md)). 그래서 **보호 대상 쪽**에서 오래된 보유자를 거부하게 한다.
-
-```
-A: lock → token 33 ─── (GC 정지 … 락 만료) ─────────── write(token 33) → 거부 (이미 34를 봄)
-B:                       lock → token 34 ─ write(token 34) → 성공
-```
+락만으로는 "**지금도 내가 보유자인가**"를 보장하지 못한다(GC 정지 중 만료 등 → [장애 유형](./05-failure-modes.md)). 그래서 **보호 대상 쪽**에서 오래된 보유자를 거부하게 한다. 개념과 그림은 [락 개론 — Fencing token](../../cs/0001-lock/02-overview.md#8-fencing-token)에 있고, 여기서는 Redis 구현만 다룬다.
 
 - 토큰은 획득할 때마다 **단조 증가**해야 한다. Redis에서는 `INCR lock:order:42:fence`를 획득과 같은 Lua 스크립트에서 실행하거나, Redisson `RFencedLock`을 쓴다.
 - 저장소는 "본 적 있는 가장 큰 토큰보다 작으면 거부"를 해야 한다. 예: `UPDATE orders SET ..., fence = :t WHERE id = 42 AND fence < :t`.
@@ -149,6 +144,7 @@ public void settle() { ... }
 
 ## 관련 문서
 
+- [락 개론 (공통 개념)](../../cs/0001-lock/02-overview.md)
 - [Redis 락의 역사](./01-history.md)
 - [Redis 락 트레이드오프와 선택 기준](./03-tradeoffs.md)
 - [Redis 락 사용 시 흔한 함정과 해결 방법](./04-pitfalls.md)

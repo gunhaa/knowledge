@@ -55,6 +55,11 @@ PostgreSQL의 RR은 그런 잠금이 아예 없다. 대신 순수하게 **MVCC �
 **핵심 교정**: "락으로 막느냐 vs 롤백시키느냐"는 프레임 자체는 훌륭하지만, PostgreSQL에서는 이게 **isolation level에 따라 아예 스위치가 꺼져 있다.** RR에서는 두 방식 다 꺼져 있어서(=아무 보호 없음, write skew 허용), MySQL RR과 이름은 같아도 실제 안전성은 더 약하다. "락도 안 걸고 롤백도 안 시키는" 이 구간을 막으려면 PostgreSQL에서는 `SERIALIZABLE`까지 올려야 하고, 그때 비로소 SIREAD lock이라는, gap lock과는 완전히 다른 방식(사전 차단이 아니라 사후 적발)으로 동일한 문제를 해결한다.
 
 ---
+### 관련 문서
+
+- [락 개론 (공통 개념)](../../knowledge/cs/0001-lock/02-overview.md)
+- [MySQL 락 개요](../../knowledge/database/0004-mysql-lock/02-overview.md)
+
 ### Sources
 - [PostgreSQL Documentation: 13.2. Transaction Isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
 - [Serializable Snapshot Isolation in PostgreSQL (arXiv, Ports & Grittner)](https://arxiv.org/pdf/1208.4179)
