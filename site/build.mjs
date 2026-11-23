@@ -56,7 +56,11 @@ const TOPIC_LABELS = {
 
 // 첫 화면에 보일 대주제 순서. 언어 → DB → 분산 시스템 → 인프라처럼 아래 계층에서 위로 쌓아 읽는다.
 // 여기에 없는 대주제는 맨 뒤에 이름순으로 붙는다.
-const TOPIC_ORDER = ['java', 'languages', 'database', 'distributed-systems', 'infra', 'web'];
+const TOPIC_ORDER = ['cs', 'java', 'languages', 'database', 'distributed-systems', 'infra', 'web'];
+
+// 사이트에 싣지 않는 세트 (knowledge/ 기준 대주제/세트 폴더). 문서는 저장소에 그대로 두고,
+// 다른 세트에서 가는 링크는 GitHub 원문으로 바뀐다. 지금 학습 대상이 아닌 세트를 적는다
+const HIDDEN_SETS = new Set(['database/0003-clickhouse']);
 const topicRank = (topic) => {
   const i = TOPIC_ORDER.indexOf(topic);
   return i === -1 ? TOPIC_ORDER.length : i;
@@ -82,6 +86,7 @@ for (const topic of fs.readdirSync(KNOWLEDGE).sort()) {
   for (const setDir of fs.readdirSync(topicDir).sort()) {
     const full = path.join(topicDir, setDir);
     if (!fs.statSync(full).isDirectory()) continue;
+    if (HIDDEN_SETS.has(`${topic}/${setDir}`)) continue;
     const docs = fs
       .readdirSync(full)
       .filter((f) => f.endsWith('.md'))
@@ -197,7 +202,9 @@ function rewriteLinks(mdast, sourceFile) {
       problems.push(`앵커 없음: ${where}`);
     }
 
-    const insideKnowledge = !path.relative(KNOWLEDGE, target).startsWith('..');
+    const knowledgeRel = toPosix(path.relative(KNOWLEDGE, target));
+    const hidden = HIDDEN_SETS.has(knowledgeRel.split('/').slice(0, 2).join('/'));
+    const insideKnowledge = !knowledgeRel.startsWith('..') && !hidden;
     if (insideKnowledge && target.endsWith('.md')) {
       // 사이트 안 링크: .md → .html, 상대 경로 유지
       node.url = rawPath.replace(/\.md$/, '.html') + (rawHash ? `#${rawHash}` : '');
