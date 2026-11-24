@@ -348,13 +348,6 @@ table.sets td.name {
     width: 9rem;
     min-width: 9rem;
 }
-/* 트랙 표의 읽는 순서 번호 */
-table.sets td.name .order {
-    display: inline-block;
-    width: 1.4rem;
-    color: #888;
-    font-variant-numeric: tabular-nums;
-}
 table.sets td.docs .kind {
     margin-right: 0.9rem;
 }

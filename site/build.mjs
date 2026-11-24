@@ -65,6 +65,13 @@ const topicRank = (topic) => {
   const i = TOPIC_ORDER.indexOf(topic);
   return i === -1 ? TOPIC_ORDER.length : i;
 };
+// 대주제 안의 세트 순서 (대주제/세트 폴더). 솔루션 바로 뒤에 그 솔루션의 락 세트를 붙여 이어 읽게 한다.
+// 여기에 없는 세트는 그 대주제의 맨 뒤에 ID순으로 붙는다
+const SET_ORDER = ['database/0001-mysql', 'database/0004-mysql-lock', 'database/0002-redis', 'database/0005-redis-lock'];
+const setRank = (s) => {
+  const i = SET_ORDER.indexOf(`${s.topic}/${s.dir}`);
+  return i === -1 ? SET_ORDER.length : i;
+};
 
 // 문서 종류 라벨은 파일명에서 순서 번호를 뗀 영어 이름 그대로 쓴다 (01-history → history).
 // 저장소 경로·사이트 주소·화면 라벨이 같은 이름이 된다
@@ -169,14 +176,6 @@ for (const lab of labs) {
   for (const key of lab.sets ?? []) {
     if (!setKeys.has(key)) problems.push(`labs.yaml: 없는 세트 ${key} (${lab.name})`);
   }
-}
-// 학습 트랙 (site/track.yaml). 첫 화면 맨 위에 순서대로 두고, 대주제 표에서는 뺀다
-const trackFile = path.join(SITE_DIR, 'track.yaml');
-const track = (fs.existsSync(trackFile) ? YAML.parse(fs.readFileSync(trackFile, 'utf8')) : null) ?? {};
-const trackSets = track.sets ?? [];
-if (trackSets.length && !track.name) problems.push('track.yaml: name이 없음');
-for (const key of trackSets) {
-  if (!setKeys.has(key)) problems.push(`track.yaml: 없는 세트 ${key}`);
 }
 const labsFor = (setKey) => labs.filter((lab) => lab.sets?.includes(setKey));
 // 한 세트에 실습이 여럿이면 labs 링크가 여럿 붙고, 마우스를 올리면 이름·설명이 보인다
@@ -383,62 +382,45 @@ for (const set of sets) {
   }
 }
 
-// 첫 화면: 트랙 → 대주제 → 세트 → 01~05
-const setByKey = new Map(sets.map((s) => [`${s.topic}/${s.dir}`, s]));
-const inTrack = new Set(trackSets);
+// 첫 화면: 대주제 → 세트 → 01~05
 const byTopic = Map.groupBy(
-  sets
-    .filter((s) => !inTrack.has(`${s.topic}/${s.dir}`))
-    .toSorted((a, b) => topicRank(a.topic) - topicRank(b.topic) || a.topic.localeCompare(b.topic)),
+  sets.toSorted((a, b) => topicRank(a.topic) - topicRank(b.topic) || a.topic.localeCompare(b.topic) || setRank(a) - setRank(b)),
   (s) => s.topic,
 );
 const kindTag = (label) => `<span class="kind">${label}</span>`;
-// 세트 한 줄: 세트 이름 | 원본 5문서 | 정리·실습
-// digest·labs는 칸 안의 고정 자리에 두어, 없는 세트도 자리를 비워 세로줄을 맞춘다. order가 있으면 이름 앞에 읽는 순서를 붙인다
-function setRow(s, order) {
-  // 원본 칸은 01~05만. 06-labs는 정리·실습 칸의 labs 자리에 둔다
-  const labsDoc = s.docs.find((d) => d.name === LABS_DOC);
-  const links = s.docs
-    .filter((d) => d !== labsDoc)
-    .map((d) => {
-      const docDigest = digest[`${s.topic}/${s.dir}/${d.name}`];
-      return `${kindLink(`${s.topic}/${s.dir}/${d.name}.html`, docKind(d.name))}${docDigest ? `<sup>${digestLink(docDigest)}</sup>` : ''}`;
-    })
-    .join('');
-  const setKey = `${s.topic}/${s.dir}`;
-  const setDigest = digestFor(setKey, s.topic);
-  const digestSlot = setDigest
-    ? kindLink(setDigest, 'digest', 'gh digest')
-    : '<span class="kind off" title="준비 중">digest</span>';
-  const labsDocLink = labsDoc ? [kindLink(`${setKey}/${labsDoc.name}.html`, 'labs', 'labs')] : [];
-  const labsSlot = `<span class="slot">${[...labsDocLink, ...labsLinks(setKey)].join(' ')}</span>`;
-  const name = `${order ? `<span class="order">${order}</span>` : ''}${escapeHtml(s.label)}`;
-  return `<tr><td class="name">${name}</td><td class="docs">${links}</td><td class="extra"><span class="slot">${digestSlot}</span>${labsSlot}</td></tr>`;
-}
-const setsTable = (rows) =>
-  `<table class="sets"><thead><tr><th></th><th>원본 5문서</th><th class="extra">정리·실습</th></tr></thead><tbody>${rows}</tbody></table>`;
-const trackSection = trackSets.length
-  ? `<section class="track"><h2>${escapeHtml(track.name)}</h2>`
-    + (track.description ? `<p>${escapeHtml(track.description)}</p>` : '')
-    + setsTable(trackSets.map((key, i) => setRow(setByKey.get(key), i + 1)).join('\n'))
-    + '</section>'
-  : '';
 const indexBody = [
   `<section><p>하나의 지식을 다섯 문서로 정리합니다.</p><ul>`
     + `<li>${['history', 'overview', 'tradeoffs', 'pitfalls', 'failure-modes'].map(kindTag).join(' · ')}: 역사 → 개요 → 트레이드오프 → 흔한 함정 → 장애 유형 순서로 읽습니다.</li>`
     + `<li>${kindTag('digest')}: 정리된 내용을 사람이 직접 검수하고 다듬은 핵심 요약입니다. 분야별로 <a class="gh" href="${DIGEST_REPO}">computer_study</a>에 올립니다.</li>`
     + `<li>${kindTag('labs')}: 직접 코드로 확인한 예제 프로젝트입니다.</li>`
     + `</ul><p>질문 단위로 쓴 기록은 <a class="gh" href="https://github.com/gunhaa/knowledge">GitHub 저장소</a>에 있습니다.</p></section>`,
-  trackSection,
-  // 트랙이 있으면 나머지 대주제는 "그 밖의 노트" 아래 한 단계 낮은 제목으로 둔다
-  ...(trackSection && byTopic.size ? ['<h2 class="others">그 밖의 노트</h2>'] : []),
-  // 대주제마다 표 하나
+  // 대주제마다 표 하나: 세트 이름 | 원본 5문서 | 정리·실습
+  // digest·labs는 칸 안의 고정 자리에 두어, 없는 세트도 자리를 비워 세로줄을 맞춘다
   ...[...byTopic].map(([topic, topicSets]) => {
-    const h = trackSection ? 'h3' : 'h2';
+    const rows = topicSets
+      .map((s) => {
+        // 원본 칸은 01~05만. 06-labs는 정리·실습 칸의 labs 자리에 둔다
+        const labsDoc = s.docs.find((d) => d.name === LABS_DOC);
+        const links = s.docs
+          .filter((d) => d !== labsDoc)
+          .map((d) => {
+            const docDigest = digest[`${s.topic}/${s.dir}/${d.name}`];
+            return `${kindLink(`${s.topic}/${s.dir}/${d.name}.html`, docKind(d.name))}${docDigest ? `<sup>${digestLink(docDigest)}</sup>` : ''}`;
+          })
+          .join('');
+        const setKey = `${s.topic}/${s.dir}`;
+        const setDigest = digestFor(setKey, s.topic);
+        const digestSlot = setDigest
+          ? kindLink(setDigest, 'digest', 'gh digest')
+          : '<span class="kind off" title="준비 중">digest</span>';
+        const labsDocLink = labsDoc ? [kindLink(`${setKey}/${labsDoc.name}.html`, 'labs', 'labs')] : [];
+        const labsSlot = `<span class="slot">${[...labsDocLink, ...labsLinks(setKey)].join(' ')}</span>`;
+        return `<tr><td class="name">${escapeHtml(s.label)}</td><td class="docs">${links}</td><td class="extra"><span class="slot">${digestSlot}</span>${labsSlot}</td></tr>`;
+      })
+      .join('\n');
     const topicDigest = digest[topic];
-    return `<section><${h}>${escapeHtml(TOPIC_LABELS[topic] ?? topic)}${topicDigest ? ` <small>${digestLink(topicDigest)}</small>` : ''}</${h}>`
-      + setsTable(topicSets.map((s) => setRow(s)).join('\n'))
-      + '</section>';
+    return `<section><h2>${escapeHtml(TOPIC_LABELS[topic] ?? topic)}${topicDigest ? ` <small>${digestLink(topicDigest)}</small>` : ''}</h2>`
+      + `<table class="sets"><thead><tr><th></th><th>원본 5문서</th><th class="extra">정리·실습</th></tr></thead><tbody>${rows}</tbody></table></section>`;
   }),
 ].join('\n');
 fs.writeFileSync(path.join(DIST, 'index.html'), page({
@@ -459,7 +441,7 @@ fs.writeFileSync(path.join(DIST, '.nojekyll'), '');
 
 console.log(`세트 ${sets.length}개, 문서 ${pageCount}개 → ${toPosix(path.relative(REPO, DIST))}/`);
 if (problems.length) {
-  console.error(`\n빌드 문제 ${problems.length}개 (끊긴 링크·앵커, digest.yaml·labs.yaml·track.yaml 경로):`);
+  console.error(`\n빌드 문제 ${problems.length}개 (끊긴 링크·앵커, digest.yaml·labs.yaml 경로):`);
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }
