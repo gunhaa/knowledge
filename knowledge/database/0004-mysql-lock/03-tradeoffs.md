@@ -45,6 +45,7 @@ InnoDB는 "**의심스러우면 넓게 잠근다**"를 골랐다. 빈칸까지 �
 | **원자적 UPDATE** `SET stock = stock - 1 WHERE id=? AND stock > 0` | 한 문장이 읽기+쓰기 | 락 보유 시간 최소, 왕복 1회 | 복잡한 판단 로직은 못 넣음 | 카운터·재고 차감. **가장 먼저 검토** |
 | **비관적 락** `SELECT ... FOR UPDATE` | 읽을 때 X 락 | 확실함, 코드 직관적 | 락 보유 시간 = 트랜잭션 길이, 데드락 가능 | 충돌이 잦고 읽은 값으로 여러 행을 고칠 때 |
 | **낙관적 락** `version` 컬럼 (`UPDATE ... WHERE id=? AND version=?`) | 쓸 때만 확인, 실패하면 재시도 | 락 대기 없음 | 충돌이 잦으면 재시도 폭증 | 충돌 드문 사용자 편집, JPA `@Version` |
+| **덧붙이기 원장** (마지막 행 + 1을 기본 키로) | 행을 고치지 않고 덧붙임. 같은 상태를 본 쓰기는 같은 키로 충돌 | 락 대기 없음, 이력 보존, 분산 락이 뚫려도 정확 | 테이블 설계가 필요, 핫 계좌는 재시도 증가 | 잔액·원장처럼 이력이 곧 데이터일 때 → [3.1](#31-예-원장으로-분산-락-없이-정확성-지키기) |
 | **`NOWAIT`** | 잠겨 있으면 즉시 실패 | 대기 없음, 빠른 실패 | 실패 처리 필요 | 좌석 선점처럼 "이미 누가 잡았으면 바로 알림" |
 | **`SKIP LOCKED`** | 잠긴 행 건너뛰기 | 작업자 여러 명이 겹치지 않게 분배 | 결과가 비결정적. 일관된 뷰가 필요하면 부적합 | DB 기반 작업 큐, Outbox 폴링 |
 | **`GET_LOCK()`** 이름 락 | 행과 무관한 이름에 세션 락 | 테이블 없이 상호 배제 | **세션 단위**, 장애 조치 시 사라짐, Group Replication에서 노드 간 공유 안 됨 | 단일 primary에서 배치 중복 실행 방지 |
@@ -52,6 +53,79 @@ InnoDB는 "**의심스러우면 넓게 잠근다**"를 골랐다. 빈칸까지 �
 | **분산 락 (Redis·ZooKeeper·etcd)** | DB 밖에서 상호 배제 | DB 부하 분리, 여러 저장소에 걸친 작업 | 정합성은 보장 못 함(fencing 필요) | DB 하나로 묶이지 않는 작업 → [락 개론 — 대안 비교](../../cs/0001-lock/03-tradeoffs.md#4-대안-비교) |
 
 PostgreSQL과의 모델 차이(범위 잠금 vs SSI·직렬화 오류)는 [MySQL과 PostgreSQL의 락 처리 차이](../../../inquiry/database/0005-mysql-postgresql-lock-handling-differences.md), [PostgreSQL은 gap lock 없이 어떻게 감지하나](../../../inquiry/database/0006-postgresql-phantom-detection-without-gap-lock.md).
+
+#### 3.1 예: 원장으로 분산 락 없이 정확성 지키기
+
+분산 락은 장애 중 이중 보유를 막지 못한다 → [락 장애 유형 — 고가용성 구성](../../cs/0001-lock/05-failure-modes.md#8-락-서비스-중단과-고가용성-구성). 그래서 정확성은 DB가 맡는다. 원리는 **"확인하고 쓰기"를 DB의 쓰기 한 번 안에 넣는 것**이다. 판단의 근거가 제약으로 쓰기 안에 들어 있으면, 두 보유자가 같은 판단을 해도 DB가 하나만 통과시킨다.
+
+예: 은행의 입금·출금·이체. 잔액을 덮어쓰지 않고, 계좌마다 거래 한 줄을 **덧붙이기만** 한다.
+
+```sql
+CREATE TABLE tx (                                -- 거래의 의도: 누가 누구에게 얼마를
+  id              BIGINT        PRIMARY KEY,
+  type            VARCHAR(16)   NOT NULL,        -- deposit | withdraw | transfer
+  from_account    BIGINT        NULL,
+  to_account      BIGINT        NULL,
+  amount          DECIMAL(19,2) NOT NULL CHECK (amount > 0),
+  idempotency_key VARCHAR(64)   NOT NULL UNIQUE, -- 같은 거래는 한 번만
+  CHECK (
+       (type = 'deposit'  AND from_account IS NULL     AND to_account IS NOT NULL)
+    OR (type = 'withdraw' AND from_account IS NOT NULL AND to_account IS NULL)
+    OR (type = 'transfer' AND from_account IS NOT NULL AND to_account IS NOT NULL
+                          AND from_account <> to_account)
+  )
+);
+
+CREATE TABLE ledger (                            -- 거래가 각 계좌에 남긴 결과
+  account_id    BIGINT        NOT NULL,
+  seq           BIGINT        NOT NULL,          -- 계좌별 순번. 마지막 행 + 1 (빈 번호 없음)
+  tx_id         BIGINT        NOT NULL REFERENCES tx(id),
+  amount        DECIMAL(19,2) NOT NULL,          -- 입금 +, 출금 -
+  balance_after DECIMAL(19,2) NOT NULL CHECK (balance_after >= 0),  -- CHECK는 8.0.16+에서 검사
+  PRIMARY KEY (account_id, seq)                  -- 같은 상태를 보고 쓴 요청은 같은 seq로 부딪힌다
+);
+```
+
+`tx` 1행과 `ledger` 행(입금·출금 1행, 이체 2행)을 **한 트랜잭션**에 쓴다. 번호는 발급받지 않고 마지막 행에서 **계산한다**.
+
+```sql
+-- ① 마지막 행 읽기 (락 없는 일반 SELECT로 충분)
+SELECT seq, balance_after FROM ledger
+ WHERE account_id = :acc ORDER BY seq DESC LIMIT 1;          -- 예: seq 7, 잔액 500
+
+-- ② 다음 행 덧붙이기 (출금 100)
+INSERT INTO ledger (account_id, seq, tx_id, amount, balance_after)
+VALUES (:acc, 7 + 1, :tx, -100, 500 - 100);                  -- 누가 먼저 8을 썼으면 중복 키 → ①부터 재시도
+```
+
+```
+A: Redis 락 획득 → 최신 행 읽음 (seq 7) ─ GC 정지 ────────────── 깨어남 → seq 8 INSERT → 중복 키 → 다시 읽고 재시도
+                                            (TTL 만료)
+B:                                          Redis 락 획득 → 최신 행 읽음 (seq 7) → seq 8 INSERT → 성공
+```
+
+채번 테이블·`AUTO_INCREMENT`·시각으로 번호를 받으면 동시 요청이 서로 다른 번호를 받아 둘 다 성공한다. 같은 상태를 본 요청이 **같은 번호**를 만들어야 충돌이 잡힌다.
+
+| 막을 것 | 장치 |
+|---|---|
+| 같은 잔액을 보고 둘 다 출금 | `PRIMARY KEY (account_id, seq)` |
+| 같은 거래 두 번 | `tx.idempotency_key` 유니크 |
+| 잔액 음수 | `CHECK (balance_after >= 0)` |
+| 이체가 한쪽 계좌만 반영 | `tx`와 `ledger` 2행을 한 트랜잭션에 |
+| 기록 수정 | 덧붙이기만. 정정은 반대 방향 거래를 추가 |
+
+- **오류별 처리**: 중복 키(1062)와 데드락(1213)은 최신 행을 다시 읽고 재시도한다. 멱등키 충돌은 "이미 처리됨"이다.
+- **이체의 `ledger` 행은 `account_id` 오름차순으로 넣는다** (from/to 방향과 무관). 반대 방향 이체끼리의 데드락을 줄이는 효율 규칙이고, 어겨도 InnoDB가 한쪽을 롤백하므로 잔액은 틀어지지 않는다.
+- **①과 ②를 `INSERT ... SELECT` 한 문장으로 합치지 않는다.** RR에서 원본 행에 공유 락이 걸려 동시 요청끼리 대기·데드락이 생긴다.
+- **외부 호출이 끼면 2단계로 쓴다**: `tx`에 상태를 두어 `pending`으로 먼저 기록 → 외부 호출(거래 ID를 멱등키로) → `WHERE status = 'pending'` 조건으로 `posted` 또는 취소.
+
+분산 락이 뚫리면 결과는 데이터 손상이 아니라 **한쪽의 재시도**다. 남는 것은 정확성 밖의 문제다.
+
+| 남는 것 | 대응 |
+|---|---|
+| 핫 계좌: 한 계좌에 거래가 몰려 재시도 폭증 | 분산 락·계좌별 큐로 줄을 세운다 (효율용) |
+| 옛 값으로 재시도해 같은 충돌 반복 | 재시도마다 다시 읽기, 상한·백오프·지터 |
+| 장애 조치 때 커밋된 행 유실 | 반동기·Group Replication → [장애 조치](./05-failure-modes.md#3-장애-조치failover). 정확성은 **DB의 제약과 내구성** 둘 다에 기댄다 |
 
 ### 4. 주요 선택지 (설정)
 
