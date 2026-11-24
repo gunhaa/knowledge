@@ -86,7 +86,7 @@ JDK Javadoc도 "많은 스레드가 쓰는 공정 락은 처리량이 낮다(oft
 | 불변 객체·스레드 한정(confinement) | JVM | **락 자체가 없음** | 변경 시 새 객체 할당, 설계 제약 | 설정·스냅샷·요청 단위 상태 |
 | DB 락·Redis·ZooKeeper·etcd | 다중 인스턴스 | JVM 밖에서 상호 배제 | 왕복 지연(ms), 정확성 보장 수준이 수단마다 다름 | 서버가 2대 이상일 때 → [락 개론 — 대안 비교](../../cs/0001-lock/03-tradeoffs.md#4-대안-비교) |
 
-JVM 밖 수단을 고르는 순서(DB 우선 → 효율용 Redis → 정확성용 ZooKeeper·etcd)와 효율/정확성 구분은 [락 개론 — 트레이드오프](../../cs/0001-lock/03-tradeoffs.md#3-효율용인가-정확성용인가)에, Java 클라이언트별 구현·주의점은 [장애 대응 §5](./05-failure-modes.md#5-다중-인스턴스-jvm-락의-한계)에 있다.
+JVM 밖 수단을 고르는 순서(DB 우선 → 효율용 Redis → 정확성용 ZooKeeper·etcd)와 효율/정확성 구분은 [락 개론 — 트레이드오프](../../cs/0001-lock/03-tradeoffs.md#3-효율용인가-정확성용인가)에, Java 클라이언트별 구현·주의점은 [장애 대응 5절](./05-failure-modes.md#5-다중-인스턴스-jvm-락의-한계)에 있다.
 
 ### 4. 주요 선택지
 
@@ -135,7 +135,7 @@ JVM 밖 수단을 고르는 순서(DB 우선 → 효율용 Redis → 정확성�
 5. **JDK 버전은?** 21~23 + 가상 스레드 + 락 안 블로킹 → `ReentrantLock`. 24+면 무관.
 6. **읽기 비율과 임계 구역 길이를 측정했나?** 읽기 ≫ 쓰기가 측정으로 확인될 때만 RW 락·`StampedLock`.
 7. **경합이 측정됐나?** JFR `jdk.JavaMonitorEnter`/`jdk.ThreadPark`로 확인([탐지 도구](./05-failure-modes.md#2-탐지)) 후 범위 축소·스트라이핑·`LongAdder`.
-8. **여러 락을 잡나?** 획득 순서를 문서화하고 `tryLock(timeout)` 전략을 정한다 → [장애 대응 §4](./05-failure-modes.md#4-예방-설계).
+8. **여러 락을 잡나?** 획득 순서를 문서화하고 `tryLock(timeout)` 전략을 정한다 → [장애 대응 4절](./05-failure-modes.md#4-예방-설계).
 
 ## 관련 문서
 

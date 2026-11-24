@@ -44,7 +44,7 @@ GC 언어에서 누수는 "**도달 가능하지만 다시 쓰지 않는 객체*
 **GC 정지가 길 때**
 1. GC 로그로 사실 확인: `-Xlog:gc*:file=gc.log:time,uptime:filecount=5,filesize=20m`
 2. 할당률이 높은 코드부터 줄인다 (JFR `jdk.ObjectAllocationSample`).
-3. 지연이 중요하면 **ZGC**(`-XX:+UseZGC`)로 교체를 검토 (GC별 대가는 [트레이드오프 §3.2](./03-tradeoffs.md#32-gc-선택)).
+3. 지연이 중요하면 **ZGC**(`-XX:+UseZGC`)로 교체를 검토 (GC별 대가는 [트레이드오프 3.2절](./03-tradeoffs.md#32-gc-선택)).
 4. 힙을 무작정 키우는 건 마지막 수단.
 
 ### 3. 컨테이너에서의 메모리 설정
@@ -61,11 +61,11 @@ GC 언어에서 누수는 "**도달 가능하지만 다시 쓰지 않는 객체*
 | 실수 | 증상 | 해결 |
 |---|---|---|
 | 기동 직후 바로 트래픽을 받음 | 배포·스케일아웃 직후 지연·타임아웃 급증 (JIT 워밍업 전) | readiness를 워밍업 후 열기. 배포 시간은 늘어난다 |
-| 느린 시작을 liveness로만 감시 | 기동 중에 재시작이 반복됨 | startup 프로브 사용 ([장애 대응 §5](./05-failure-modes.md#5-헬스-체크-kubernetes--spring-boot-actuator)) |
+| 느린 시작을 liveness로만 감시 | 기동 중에 재시작이 반복됨 | startup 프로브 사용 ([장애 대응 5절](./05-failure-modes.md#5-헬스-체크-kubernetes--spring-boot-actuator)) |
 | 쓰지 않는 자동 설정·빈을 모두 로딩 | 시작 시간 증가 | 불필요 자동 설정 제거, Spring Boot 지연 초기화 (대신 첫 요청이 느려짐) |
 | AOT 캐시를 만들 때와 다른 JDK·클래스패스로 실행 | 캐시가 무시되어 단축 효과가 없음 | 같은 JDK·같은 jar로 학습 실행(training run)과 운영 실행 |
 
-AOT 캐시(JDK 24+ `-XX:AOTCache`, 26에서 모든 GC 지원)·GraalVM Native Image·CRaC 중 무엇을 고를지는 [트레이드오프 §3.3](./03-tradeoffs.md#33-시작-시간-jit-vs-aot).
+AOT 캐시(JDK 24+ `-XX:AOTCache`, 26에서 모든 GC 지원)·GraalVM Native Image·CRaC 중 무엇을 고를지는 [트레이드오프 3.3절](./03-tradeoffs.md#33-시작-시간-jit-vs-aot).
 
 ### 5. 의존성과 업그레이드
 

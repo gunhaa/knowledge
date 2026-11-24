@@ -21,8 +21,8 @@ MySQL은 **누구나 금방 몰 수 있는 튼튼한 소형 트럭**이다. 짐�
 |---|---|---|
 | **플러그인형 스토리지 엔진** (SQL 계층 ↔ 엔진 분리) | MyISAM → InnoDB 교체를 서버 재작성 없이 해냄. MyRocks(LSM, 쓰기·압축 유리) 같은 엔진 선택지 | 트랜잭션·락·통계가 서버/엔진 두 층에 나뉨 → **binlog(서버)와 redo log(InnoDB) 두 로그를 2PC로 맞춰야** 해서 커밋당 fsync가 늘어난다(`sync_binlog=1` + `innodb_flush_log_at_trx_commit=1`). 엔진 간 기능 불일치(MyISAM은 트랜잭션 없음) |
 | **PK 클러스터드 인덱스** (테이블 = PK 순 B+Tree) | PK 조회·PK 범위 스캔이 한 번에 끝남. 보조 인덱스가 **물리 위치가 아니라 PK 값**을 가리켜, 인덱스 안 걸린 컬럼을 UPDATE하면 보조 인덱스를 안 고친다 | 보조 인덱스 조회는 **보조 → PK 두 번 탐색**("clustered index penalty"). PK가 길면 모든 보조 인덱스가 커지고, 랜덤 PK(UUIDv4)는 페이지 분할을 부른다 |
-| **undo log 기반 MVCC** (제자리 갱신 + 옛 버전은 undo에) | 테이블에 죽은 행이 쌓이지 않아 PostgreSQL식 VACUUM 튜닝이 거의 필요 없음 | 긴 트랜잭션이 undo 정리(purge)를 막아 **History list가 불어나고** 읽기가 느려진다 → [04 §3](./04-pitfalls.md#3-긴-트랜잭션과-history-list) |
-| **기본 격리 수준 REPEATABLE READ + gap/next-key lock** | 잠금 읽기에서도 팬텀 방지, 옛 statement 기반 복제와의 일관성 | 존재하지 않는 범위까지 잠가 **데드락·락 대기가 늘어난다**. 그래서 많은 대규모 서비스가 READ COMMITTED로 내린다(§3) |
+| **undo log 기반 MVCC** (제자리 갱신 + 옛 버전은 undo에) | 테이블에 죽은 행이 쌓이지 않아 PostgreSQL식 VACUUM 튜닝이 거의 필요 없음 | 긴 트랜잭션이 undo 정리(purge)를 막아 **History list가 불어나고** 읽기가 느려진다 → [흔한 함정 3절](./04-pitfalls.md#3-긴-트랜잭션과-history-list) |
+| **기본 격리 수준 REPEATABLE READ + gap/next-key lock** | 잠금 읽기에서도 팬텀 방지, 옛 statement 기반 복제와의 일관성 | 존재하지 않는 범위까지 잠가 **데드락·락 대기가 늘어난다**. 그래서 많은 대규모 서비스가 READ COMMITTED로 내린다(3절) |
 | **연결당 스레드** (thread-per-connection) | 구현 단순, 연결 수가 적을 땐 지연이 가장 낮음. PostgreSQL의 연결당 프로세스보다 연결 1개가 가볍다 | 동시 연결 수백~수천에서 컨텍스트 스위칭으로 처리량 하락(Oracle 벤치마크: 약 512 연결부터 TPS 감소). 스레드 풀은 **Enterprise 또는 Percona/MariaDB**에만 있다 → 커뮤니티판은 앱 풀·ProxySQL로 연결 수를 묶어야 한다 |
 | **binlog 기반 논리 복제** (기본 비동기) | replica 추가가 쉽고, 버전이 다른 노드·CDC(Debezium)·PITR이 같은 binlog를 공유 | 기본 비동기라 장애 조치 시 **유실 가능**, replica 적용이 source보다 느리면 지연. 무손실을 원하면 반동기·Group Replication으로 지연 시간을 대가로 낸다 |
 | **단순함 우선** (기능보다 쉬운 운영) | 설치·튜닝 변수가 적고, 경험자·도구(XtraBackup, gh-ost, Orchestrator)·매니지드 선택지가 가장 많다 | PostgreSQL 대비 확장 생태계(PostGIS, pgvector급), 부분 인덱스, 트랜잭션 DDL, 풍부한 타입·인덱스 종류(GIN/GiST/BRIN)가 없거나 약하다. 9.0의 `VECTOR` 타입도 커뮤니티판엔 벡터 인덱스가 없다 |
@@ -35,7 +35,7 @@ MySQL은 **누구나 금방 몰 수 있는 튼튼한 소형 트럭**이다. 짐�
 |---|---|---|---|
 | **PostgreSQL** | 확장(PostGIS·pgvector·TimescaleDB), 부분·표현식·GIN 인덱스, 트랜잭션 DDL, 엄격한 SQL. 2025 Stack Overflow 설문 사용률(전체 응답자) 약 56% vs MySQL 약 40% | VACUUM·bloat 관리, 연결당 프로세스라 PgBouncer 거의 필수, 기본 격리 수준이 READ COMMITTED이고 RR 의미가 MySQL과 다름 | 복잡한 쿼리·다양한 데이터 타입·확장이 중요할 때 |
 | **MariaDB** | 커뮤니티판에 스레드 풀·Galera·시스템 버전 테이블 포함 | 10.x 이후 **호환이 갈라짐**: GTID 형식이 달라 MySQL ↔ MariaDB 복제가 제한적, JSON은 바이너리 타입이 아니라 `LONGTEXT` 별칭, 8.0+ 기능 일부 없음 | 리눅스 배포판 기본·Galera 멀티 마스터가 필요할 때. "MySQL 드롭인"으로 가정하면 안 된다 |
-| **Aurora MySQL** | 스토리지를 3 AZ·6벌 분산 볼륨으로 분리 → 최대 128 TiB, replica 최대 15대가 같은 볼륨 공유(AWS 문서: 복제 지연 보통 100ms보다 훨씬 짧음). 장애 조치 동작은 [05 §6](./05-failure-modes.md#6-매니지드-서비스의-ha) | AWS 종속, 엔진 버전이 커뮤니티보다 늦게 따라옴, 비용 구조 복잡(Standard는 I/O 요청당 과금, I/O-Optimized는 I/O 무료 대신 인스턴스·스토리지 단가 인상 — AWS 안내 기준 I/O가 Aurora 비용의 25%를 넘으면 유리, 실제 손익분기는 워크로드마다 다름) | AWS에서 운영 부담을 줄이고 읽기 확장이 필요할 때 |
+| **Aurora MySQL** | 스토리지를 3 AZ·6벌 분산 볼륨으로 분리 → 최대 128 TiB, replica 최대 15대가 같은 볼륨 공유(AWS 문서: 복제 지연 보통 100ms보다 훨씬 짧음). 장애 조치 동작은 [장애 대응 6절](./05-failure-modes.md#6-매니지드-서비스의-ha) | AWS 종속, 엔진 버전이 커뮤니티보다 늦게 따라옴, 비용 구조 복잡(Standard는 I/O 요청당 과금, I/O-Optimized는 I/O 무료 대신 인스턴스·스토리지 단가 인상 — AWS 안내 기준 I/O가 Aurora 비용의 25%를 넘으면 유리, 실제 손익분기는 워크로드마다 다름) | AWS에서 운영 부담을 줄이고 읽기 확장이 필요할 때 |
 | **Vitess / PlanetScale** | MySQL 앞단 샤딩 미들웨어(YouTube 출신). 쓰기 수평 확장, 온라인 리샤딩, 실제 MySQL 엔진 사용 | 샤드 키 설계 필요, 교차 샤드 조인·트랜잭션·외래 키 제약(외래 키는 단일 샤드 범위에서부터 지원) | 단일 primary 쓰기 한계를 넘었고 MySQL 운영 경험을 살리고 싶을 때 |
 | **TiDB** | MySQL 프로토콜 호환 분산 SQL(Raft, TiKV). 샤드 키 없이 노드 추가로 확장, HTAP(TiFlash) | 컴포넌트가 많아 운영 복잡(PD·TiKV·TiDB), 단건 지연은 단일 MySQL보다 높음, 일부 MySQL 기능·동작 차이 | 수십 TB 이상·쓰기 확장이 필요한데 애플리케이션 샤딩은 피하고 싶을 때 |
 
@@ -62,7 +62,7 @@ PostgreSQL과의 락·MVCC 차이는 [MySQL과 PostgreSQL의 락 처리 차이](
 
 `binlog_format` 변수 자체가 8.0.34부터 deprecated이며, 장기적으로 ROW만 남을 예정이다.
 
-**복제·고가용성 모드** (동작 방식·구성 절차·장애 조치는 [05 §3 복제 방식](./05-failure-modes.md#3-복제-방식), [05 §5 고가용성 구성 선택지](./05-failure-modes.md#5-고가용성-구성-선택지))
+**복제·고가용성 모드** (동작 방식·구성 절차·장애 조치는 [장애 대응 3절 — 복제 방식](./05-failure-modes.md#3-복제-방식), [장애 대응 5절 — 고가용성 구성 선택지](./05-failure-modes.md#5-고가용성-구성-선택지))
 
 | 모드 | 커밋 지연 비용 | 유실(RPO) | 제약 |
 |---|---|---|---|

@@ -60,7 +60,7 @@ model: claude-opus-5-5
 ### 4. 현재 상태 (2026년 11월)
 
 - **LTS**: 17, 21, **25**(최신). 다음 LTS는 29(2027년 9월 예정). 비LTS 최신은 27. Valhalla 값 클래스(JEP 401)는 JDK 28(2027년 3월 예정)에 프리뷰로 통합됐다.
-- **배포판**: Oracle JDK(17부터 NFTC로 운영 무료지만 다음 LTS 출시 후 1년까지만 — Oracle JDK 21은 2026년 10월 CPU부터 OTN 유료 라이선스), Eclipse **Temurin**, Amazon **Corretto**, Azul Zulu, Microsoft Build of OpenJDK, Red Hat, **GraalVM**(네이티브 이미지). 버전별 지원 기간과 배포판 고르는 기준은 [트레이드오프 §3.1](./03-tradeoffs.md#31-jdk-배포판과-lts).
+- **배포판**: Oracle JDK(17부터 NFTC로 운영 무료지만 다음 LTS 출시 후 1년까지만 — Oracle JDK 21은 2026년 10월 CPU부터 OTN 유료 라이선스), Eclipse **Temurin**, Amazon **Corretto**, Azul Zulu, Microsoft Build of OpenJDK, Red Hat, **GraalVM**(네이티브 이미지). 버전별 지원 기간과 배포판 고르는 기준은 [트레이드오프 3.1절](./03-tradeoffs.md#31-jdk-배포판과-lts).
 - 실무는 Spring Boot 3.x/4.x(최소 Java 17) 중심으로 **17 → 21 → 25** 이동 중. 8·11은 레거시.
 - Kotlin이 Android와 서버 일부를 가져갔지만, JVM 생태계와 대규모 백엔드에서 Java는 여전히 주류다.
 
