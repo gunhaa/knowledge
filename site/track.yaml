@@ -1,0 +1,18 @@
+# 첫 화면 맨 위에 두는 학습 트랙
+#
+# 지금 집중하는 주제의 세트를 읽는 순서대로 적는다. 여기 적은 세트는 아래 대주제 표에서 빠지고 트랙에만 보인다.
+# 주제가 바뀌면 이 파일만 바꾼다. 문서 경로·대주제는 그대로다.
+#
+# 필드
+#   name         트랙 이름 (필수). 첫 화면 제목
+#   description  한 줄 설명. 제목 아래에 보인다
+#   sets         읽는 순서대로 knowledge 세트 (knowledge/ 기준 대주제/세트 폴더). 없는 세트를 적으면 빌드가 실패한다
+#                비우거나 파일을 지우면 트랙 없이 대주제 표만 보인다
+name: 동시성
+description: 락으로 막는 방법을 층마다 보고(락 개론 → Java → MySQL → Redis), 락이 뚫려도 결과가 맞는 구조(원장)로 마무리합니다.
+sets:
+  - cs/0001-lock
+  - java/0002-java-lock
+  - database/0004-mysql-lock
+  - database/0005-redis-lock
+  - database/0006-ledger
