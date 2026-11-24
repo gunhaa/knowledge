@@ -263,7 +263,7 @@ lombok.setter.flagUsage = warning
 
 - **JPA 엔티티에 `@Data`·`@EqualsAndHashCode`·`@ToString` 금지**: 지연 로딩 프록시 초기화, 양방향 연관관계 순환 참조로 `StackOverflowError`, 영속화 전후 `id` 변경으로 `HashSet`이 깨진다. `@Getter` + `@NoArgsConstructor(access = PROTECTED)`가 일반적.
 - **`@Builder` + `@NoArgsConstructor` 동시 사용 시 컴파일 에러**: `@Builder`가 전체 생성자를 필요로 하므로 `@AllArgsConstructor`도 붙여야 한다.
-- **`@Setter` 남용**: 불변성이 깨지고 변경 지점 추적이 어려워진다.
+- **`@Setter` 남용**: 불변성을 잃고 변경 지점 추적이 어려워진다.
 - **Java record와의 관계**: 단순 불변 데이터는 `record`가 `@Value`를 대체한다. 다만 빌더(`@Builder`는 record에도 사용 가능), `@With`, 상속, JPA 엔티티(record 불가) 영역은 여전히 Lombok이 쓰인다.
 - **JDK 업그레이드 시 Lombok 먼저 올리기**: 새 JDK 지원은 보통 출시 즈음에 나온다(JDK 25 → v1.18.40, JDK 26 → v1.18.46). Maven에서는 `maven-compiler-plugin`의 `annotationProcessorPaths`에 Lombok을 명시해야 하는 경우가 많다(JDK 23부터 클래스패스의 어노테이션 프로세서 자동 실행이 기본 비활성화).
 

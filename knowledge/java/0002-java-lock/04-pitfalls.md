@@ -19,7 +19,7 @@ model: claude-opus-5-5
 
 | 패턴 | 잘못된 코드 | 해결 |
 |---|---|---|
-| **읽고-고치고-쓰기** | `count++` (volatile이어도 깨짐) | `AtomicLong.incrementAndGet()`, `LongAdder`, 락 |
+| **읽고-고치고-쓰기** | `count++` (volatile이어도 갱신 유실) | `AtomicLong.incrementAndGet()`, `LongAdder`, 락 |
 | **확인 후 실행** | `if (!map.containsKey(k)) map.put(k, v);` | `putIfAbsent`, `computeIfAbsent` |
 | 복합 연산 | 동기화 컬렉션 두 번 호출 사이 끼어들기 | 연산 전체를 하나의 락으로, 또는 원자적 메서드 |
 | 지연 초기화 | `if (instance == null) instance = new X();` | 홀더 클래스 패턴, `enum` 싱글톤, 또는 `volatile` + DCL |

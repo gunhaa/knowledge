@@ -45,7 +45,7 @@ java \
 | 옵션 | 이유 |
 |---|---|
 | `HeapDumpOnOutOfMemoryError` | 원인 분석용 힙 덤프 (덤프 경로는 영구 볼륨으로) |
-| **`ExitOnOutOfMemoryError`** | OOM 후 JVM은 일관성이 깨진 "좀비" 상태가 되기 쉽다 → **즉시 종료하고 오케스트레이터가 재시작**하게 |
+| **`ExitOnOutOfMemoryError`** | OOM 후 JVM은 일관성을 잃은 "좀비" 상태가 되기 쉽다 → **즉시 종료하고 오케스트레이터가 재시작**하게 |
 | GC 로그 | 정지 시간·빈도 사후 분석 |
 | JFR 상시 기록 | 장애 직전 1시간의 스레드·락·할당·I/O 이벤트 |
 
