@@ -27,6 +27,7 @@ model: claude-opus-5-5
 | **보유자 정지** | 진행 | 대기자 누적 → 풀 고갈 → 연쇄 장애 | 전 층 |
 | **보유자 사망 (고아 락)** | 진행 | 아무도 획득 못 함 | 해제 보장이 없는 락 |
 | **lease 만료 후 이중 보유** | **상호 배제** | 두 보유자가 동시에 쓰기 → 데이터 손상 | 분산 락 |
+| **장애 조치 중 락 유실** | **상호 배제** | 장애 조치 직후 새 보유자가 같은 락을 얻음 | 복제하는 락 저장소, DB 세션 락 |
 | **락 서비스 중단** | 가용성 | 아무도 락을 못 얻음 | 분산 락 |
 
 각 유형은 장애 지점 → 원인 → 영향 → 대응 순으로 쓴다.
@@ -86,7 +87,7 @@ model: claude-opus-5-5
 |---|---|---|---|
 | JVM | 프로세스 수명 | 프로세스와 함께 해제 | 대기자 누적. 상호 배제는 유지 |
 | DB | 세션·트랜잭션 | 커넥션 종료 감지 후 롤백·해제 (감지까지 지연) | 트랜잭션이 열린 채 대기자 누적 → [MySQL 장애 유형](../../database/0004-mysql-lock/05-failure-modes.md#1-락-관련-장애-유형) |
-| DB 이름 락 | 세션 | 세션 종료 시 해제. 장애 조치 후 새 primary에는 락이 없음 | 위와 같음 |
+| DB 이름 락 | 세션 | 세션 종료 시 해제. 장애 조치 후 새 primary에는 락이 없음 (8절) | 위와 같음 |
 | Redis | TTL | TTL 뒤 해제 (그동안 대기) | **TTL 만료 → 이중 보유** (7절) |
 | ZooKeeper·etcd | 세션·lease | 세션 타임아웃 뒤 해제 | 세션 만료 → 이중 보유 가능. 단, 순번으로 fencing 가능 |
 
@@ -102,7 +103,7 @@ model: claude-opus-5-5
 | 작업이 TTL보다 오래 걸림 | 만료 → 다른 보유자 획득 → 동시 실행 |
 | 긴 GC 정지·프로세스 일시 정지 | 정지 중 만료 → 깨어난 옛 보유자가 여전히 보유자라고 믿고 쓰기 |
 | 네트워크 분리 | 보유자는 락이 있다고 믿지만 서버 쪽에서는 만료 |
-| 락 저장소 장애 조치 | 비동기 복제로 락 기록 유실 → 새 보유자 (Redis) |
+| 락 저장소 장애 조치 | 비동기 복제로 락 기록 유실 → 새 보유자 (Redis, 8절) |
 | 시계 점프 | TTL이 예상보다 빨리 만료 |
 
 - **영향**: 상호 배제가 위반되어(이중 보유) 결제 이중 처리, 재고 음수, 파일 덮어쓰기.
@@ -119,16 +120,47 @@ INSERT INTO processed_event (event_id) VALUES (:id);   -- event_id UNIQUE
 
 Redis에서 각 시나리오가 어떻게 일어나는지는 [Redis 락 장애 유형](../../database/0005-redis-lock/05-failure-modes.md)에 있다.
 
-### 8. 락 서비스 중단
+### 8. 락 서비스 중단과 고가용성 구성
 
 - **장애 지점**: 분산 락 저장소(Redis, etcd, ZooKeeper) 또는 DB.
 - **영향**: 락을 쓰는 모든 기능이 멈춘다. 락 저장소가 단일 장애점이 된다.
-- **대응**: 락을 못 얻을 때의 정책을 **미리** 정한다.
+- **대응**: 락 저장소를 다중화한다. 다중화 구성마다 장애 때 락에 생기는 일이 다르다.
 
-| 정책 | 맞는 경우 | 대가 |
-|---|---|---|
-| 작업 중단 (안전 우선) | 정확성용 — 결제, 재고 | 가용성 손실 |
-| 락 없이 진행 (가용성 우선) | 효율용 — 배치 중복, 캐시 재계산 | 중복 실행 |
+구성을 가르는 것은 **언제 쓰기 성공을 응답하나** 하나다. 락에 생기는 일은 세 가지로 나뉜다.
+
+- **유실**: 저장소에서 락 기록이 사라진다. 이중 보유로 이어진다.
+- **이중 보유**: 두 보유자가 동시에 락을 가진다. 상호 배제 위반.
+- **획득 불가**: 아무도 락을 얻지 못한다. 가용성 손실.
+
+**고립**은 primary가 살아 있는데 standby·감시자와의 연결만 끊긴 상태다. 감시자가 standby를 승격시키면 primary가 두 대가 된다.
+
+| 구성 | 성공 응답 시점 | 장애 때 락에 생기는 일 | 예 |
+|---|---|---|---|
+| 단일 노드 | 자기 노드에 기록한 뒤 | 노드 장애 → **획득 불가**. 재시작 → 메모리에 있던 락 **유실** | Redis 단일, MySQL 단일 |
+| Active-Standby + 비동기 복제 | primary에 기록한 직후 | 장애 조치 → 복제가 덜 된 락 **유실** → **이중 보유**<br>고립 → 옛·새 primary가 둘 다 락을 내줌 → **이중 보유** | Redis Sentinel, MySQL 비동기 복제 |
+| Active-Standby + 반동기 복제 | replica가 binlog를 **받았다는** ACK 뒤 (적용은 아직). 시간이 넘으면(기본 10초) 비동기로 강등 | 장애 조치 → 세션 락(`GET_LOCK`, 행 락)은 복제되지 않아 모두 **유실**<br>고립 → 비동기로 강등된 뒤에는 비동기와 같음 | MySQL 반동기 + Orchestrator |
+| Raft (과반 기록) | **리더를 포함한 과반이 로그에 덧붙이고 fsync한** 뒤 | 저장소의 락 **유실 없음**. 고립된 소수 쪽은 **획득 불가**<br>남는 위험: 보유자 쪽 lease 만료 뒤 **이중 보유** (7절) | etcd, Kafka KRaft (참고) |
+| Active-Active (다중 쓰기) | 과반 합의 뒤. 단, **합의 대상은 커밋된 행 쓰기뿐** | 장애가 없어도 DB 락(`FOR UPDATE`, `GET_LOCK`)은 **그 노드 안에서만 유효** → 노드 사이 상호 배제에 쓸 수 없음<br>**대신**: 유니크 키·버전 조건부 쓰기로 커밋할 때 충돌을 잡고 재시도. 또는 같은 키의 쓰기를 한 노드로만 보냄. 롤백되는 쪽이 이미 실행한 외부 작업은 멱등키로 막음 → [MySQL 락 — GR multi-primary](../../database/0004-mysql-lock/05-failure-modes.md#5-group-replication-multi-primary) | MySQL Group Replication multi-primary |
+
+- ZooKeeper(Zab)와 MySQL Group Replication single-primary(Paxos 계열)도 Raft 행처럼 과반이 기록한 뒤 응답한다. Redlock(독립 노드 과반)은 복제가 없는 별도 방식이다 → [Redis 락 장애 유형](../../database/0005-redis-lock/05-failure-modes.md#10-배포-형태별-고가용성-동작).
+- 비동기 → 반동기 → Raft로 갈수록 이중 보유는 줄고 획득 불가가 늘어난다. Active-Active는 이 축에서 벗어나, 락 대신 커밋 시 충돌 검사로 정확성을 지킨다. 어느 구성도 보유자 쪽 이중 보유(7절)는 막지 못한다.
+- 샤딩(샤드마다 위 구성 중 하나), 멀티 리전 등 더 넓은 다중화는 [고가용성 패턴](../../../inquiry/distributed-systems/0009-high-availability-replication-vs-cluster-and-patterns.md)에 있다.
+
+**권장 구조: 분산 락은 효율, 정확성은 DB**
+
+위 표에서 보듯 어느 구성도 분산 락의 이중 보유를 0으로 만들지 못한다. 그래서 역할을 두 층으로 나눈다 → [효율용인가, 정확성용인가](./03-tradeoffs.md#3-효율용인가-정확성용인가).
+
+| 층 | 역할 | 장치 | 고가용성 구성 | 락을 못 얻으면 |
+|---|---|---|---|---|
+| **분산 락** | 효율 — 같은 일을 동시에 덜 하게 | Redis 락 등 | Active-Standby + 비동기로 충분 (Redis Sentinel) | 건너뛰거나 락 없이 진행. 뚫려도 아래 층이 막음 |
+| **DB** | 정확성 — 뚫려도 데이터가 틀어지지 않게 | 트랜잭션, 유니크 키, 조건부 UPDATE, 멱등키 | single-primary (반동기 또는 GR single-primary). Active-Active면 락 대신 조건부 쓰기 + 재시도 | 트랜잭션 실패로 돌려주고 재시도 |
+
+- DB 층은 장애 조치에도 안전하다. 행 락과 커밋 전 데이터가 **같은 트랜잭션**에 있어 함께 사라지기 때문이다. `GET_LOCK`처럼 트랜잭션 밖에서 쥔 세션 락은 이 보호를 받지 못하므로 분산 락 층으로 본다.
+- 보호 대상이 DB가 아니어서(외부 API, 파일, 리더 선출) DB 제약을 걸 수 없을 때만 Raft 저장소(etcd, ZooKeeper)에 **fencing token**을 더한다. 이때도 정확성은 보호 대상이 옛 토큰을 거부하는 데서 나온다.
+
+**분산 락이 뚫려도 정확성을 지키는 방법**
+
+"확인하고 쓰기"를 DB의 쓰기 한 번 안에 넣는다. 조건부 UPDATE, 유니크 키, 멱등키, 마지막 행에서 계산한 순번을 기본 키로 쓰는 원장이 그 예다. 이 장치가 있으면 분산 락이 뚫렸을 때의 결과는 **데이터 손상**이 아니라 **한쪽의 재시도**가 되고, 정확성은 DB의 제약과 내구성(위 표의 DB 층 구성)에 기댄다 → 예시: [MySQL 락 — 원장으로 분산 락 없이 정확성 지키기](../../database/0004-mysql-lock/03-tradeoffs.md#31-예-원장으로-분산-락-없이-정확성-지키기).
 
 ### 9. 적용 한계와 반례
 
@@ -169,3 +201,6 @@ Redis에서 각 시나리오가 어떻게 일어나는지는 [Redis 락 장애 �
 - [What really happened on Mars? — Mars Pathfinder 우선순위 역전](https://www.cs.cornell.edu/courses/cs614/1999sp/papers/pathfinder.html)
 - [Java Tutorials — Liveness (Deadlock, Starvation, Livelock)](https://docs.oracle.com/javase/tutorial/essential/concurrency/liveness.html)
 - [MySQL 8.4 Reference Manual — Deadlock Detection](https://dev.mysql.com/doc/refman/8.4/en/innodb-deadlock-detection.html)
+- [MySQL 8.4 Reference Manual — Semisynchronous Replication](https://dev.mysql.com/doc/refman/8.4/en/replication-semisync.html)
+- [MySQL 8.4 Reference Manual — Group Replication Limitations](https://dev.mysql.com/doc/refman/8.4/en/group-replication-limitations.html)
+- [Ongaro, Ousterhout — In Search of an Understandable Consensus Algorithm (Raft, 2014)](https://raft.github.io/raft.pdf)
