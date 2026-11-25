@@ -55,6 +55,7 @@ model: claude-opus-5-5
 - 결과: `History list length` 증가 → 모든 읽기가 옛 버전을 거슬러 올라가며 느려짐, undo 테이블스페이스 비대화.
 - 탐지: `SELECT * FROM information_schema.innodb_trx ORDER BY trx_started;`
 - 해결: 커넥션 풀의 autocommit 확인, 트랜잭션 타임아웃, 장시간 분석 쿼리는 replica로.
+- 왜 트랜잭션 하나가 서버 전체의 읽기를 느리게 하는지(가장 오래된 Read View가 purge의 한계선): [InnoDB MVCC 8절](../../../inquiry/database/0017-mysql-innodb-mvcc-mechanism.md#8-purge와-history-list-긴-트랜잭션이-왜-위험한가)
 
 ### 4. 연결 문제
 

@@ -129,7 +129,7 @@ id > 12 AND id < 18 FOR UPDATE   (PK, 인덱스 값 10, 15, 20)
 | 락 | 없음 | S 또는 X + (격리 수준에 따라) gap |
 | 막히나 | 안 막힘 | 다른 쓰기와 충돌하면 대기 |
 
-같은 트랜잭션 안에서 일반 `SELECT`와 `SELECT ... FOR UPDATE`가 **서로 다른 값을 볼 수 있다.** 앞은 스냅샷, 뒤는 최신값이다. 스냅샷과 gap lock은 별개의 장치다 → [gap lock은 스냅샷 시점에 걸리지 않는다](../../../inquiry/database/0003-mysql-gap-lock-next-key-lock-mechanism-and-terms.md).
+같은 트랜잭션 안에서 일반 `SELECT`와 `SELECT ... FOR UPDATE`가 **서로 다른 값을 볼 수 있다.** 앞은 스냅샷, 뒤는 최신값이다. 스냅샷과 gap lock은 별개의 장치다 → [gap lock은 스냅샷 시점에 걸리지 않는다](../../../inquiry/database/0003-mysql-gap-lock-next-key-lock-mechanism-and-terms.md). 스냅샷이 undo로 옛 버전을 재구성하는 과정은 [InnoDB MVCC는 어떻게 동작하나](../../../inquiry/database/0017-mysql-innodb-mvcc-mechanism.md).
 
 ### 6. 격리 수준에 따른 차이
 

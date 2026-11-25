@@ -47,7 +47,7 @@ MySQL은 **칸이 딱 정해진 큰 장부(표)** 를 관리하는 사서다. �
 | **클러스터드 인덱스** | 테이블 데이터 자체가 PK 순서의 B+Tree. 보조 인덱스는 PK 값을 가리킨다 → PK는 짧고 순차적인 값(AUTO_INCREMENT, UUIDv7)이 유리 |
 | **Buffer Pool** | 16KB 페이지 캐시. `innodb_buffer_pool_size`를 전용 서버 메모리의 50~75%로 |
 | **redo log** | 변경을 먼저 순차 기록(WAL) → 크래시 후 재적용 |
-| **undo log** | 롤백 + MVCC 옛 버전 제공 |
+| **undo log** | 롤백 + MVCC 옛 버전 제공 → [동작 원리](../../../inquiry/database/0017-mysql-innodb-mvcc-mechanism.md) |
 | **doublewrite buffer** | 페이지 쓰기 도중 전원 차단으로 생기는 "찢어진 페이지" 방지 |
 | **binlog** (서버 계층) | 커밋된 변경의 논리 로그 → 복제, 시점 복구(PITR), CDC(Debezium) |
 
@@ -61,6 +61,7 @@ MySQL은 **칸이 딱 정해진 큰 장부(표)** 를 관리하는 사서다. �
 | SERIALIZABLE | ✗ | ✗ | ✗ | 일반 SELECT도 공유 락 |
 
 - 일반 `SELECT`는 락 없는 **MVCC 스냅샷 읽기**, `SELECT ... FOR UPDATE`·`UPDATE`·`DELETE`는 **현재 값 읽기 + 락**. 같은 트랜잭션 안에서도 두 읽기의 결과가 다를 수 있다.
+- 스냅샷이 어떻게 만들어지고 어떤 버전이 보이는지(숨은 컬럼, undo 버전 체인, Read View, purge): [InnoDB MVCC는 어떻게 동작하나](../../../inquiry/database/0017-mysql-innodb-mvcc-mechanism.md)
 - 락 세부 동작: [gap/next-key lock 정리](../../../inquiry/database/0003-mysql-gap-lock-next-key-lock-mechanism-and-terms.md), [RR에서 next-key lock이 걸리는 경우](../../../inquiry/database/0016-mysql-rr-next-key-lock-cases.md), [PostgreSQL과 락 처리 차이](../../../inquiry/database/0005-mysql-postgresql-lock-handling-differences.md)
 
 ### 5. 바로 써 보기
@@ -192,6 +193,7 @@ spring:
 - [MySQL 트레이드오프 — 무엇을 얻고 무엇을 포기했나, 언제 고르나](./03-tradeoffs.md)
 - [MySQL 운영 시 흔한 함정과 해결 방법](./04-pitfalls.md)
 - [MySQL 장애 대응과 고가용성](./05-failure-modes.md)
+- [InnoDB MVCC는 어떻게 동작하나](../../../inquiry/database/0017-mysql-innodb-mvcc-mechanism.md)
 - [PostgreSQL RR의 MVCC vs MySQL](../../../inquiry/database/0007-postgresql-repeatable-read-mvcc-vs-mysql.md)
 
 ## 참고 자료
